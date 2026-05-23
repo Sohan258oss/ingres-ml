@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>INGRES Groundwater Assistant</title>
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #dbe4ee;
+      --panel: #ffffff;
+      --bg: #eef6f8;
+      --blue: #0ea5e9;
+      --green: #059669;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      height: 100vh;
+      overflow: hidden;
+    }
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(360px, 0.92fr) minmax(420px, 1.08fr);
+      height: 100vh;
+    }
+    .left, .right {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .left {
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+    }
+    header {
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .brand h1 {
+      font-size: 18px;
+      margin: 0;
+      letter-spacing: 0;
+    }
+    .brand p {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .status {
+      font-size: 12px;
+      color: var(--green);
+      background: #dcfce7;
+      padding: 5px 9px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    #thread {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .msg {
+      max-width: 92%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      line-height: 1.48;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+    .user {
+      align-self: flex-end;
+      color: white;
+      background: var(--blue);
+    }
+    .bot {
+      align-self: flex-start;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+    }
+    .composer {
+      border-top: 1px solid var(--line);
+      padding: 14px;
+      display: flex;
+      gap: 10px;
+      background: #fff;
+    }
+    textarea {
+      flex: 1;
+      min-height: 48px;
+      max-height: 120px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 11px 12px;
+      font: inherit;
+      outline: none;
+    }
+    textarea:focus { border-color: var(--blue); }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 0 18px;
+      background: var(--ink);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .right {
+      padding: 22px;
+      gap: 16px;
+    }
+    .asset-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .asset-header h2 {
+      font-size: 17px;
+      margin: 0;
+    }
+    .asset-frame {
+      flex: 1;
+      min-height: 0;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+    }
+    .placeholder {
+      color: var(--muted);
+      text-align: center;
+      max-width: 420px;
+      line-height: 1.6;
+    }
+    #chart {
+      max-width: 100%;
+      max-height: 100%;
+      display: none;
+      border-radius: 10px;
+    }
+    .downloads {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .download {
+      display: none;
+      text-decoration: none;
+      background: #0f172a;
+      color: white;
+      border-radius: 10px;
+      padding: 10px 13px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .warning {
+      color: #b45309;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      padding: 9px 11px;
+      border-radius: 10px;
+      font-size: 12px;
+      display: none;
+    }
+    @media (max-width: 860px) {
+      body { overflow: auto; height: auto; }
+      .shell { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+      .left { min-height: 58vh; border-right: 0; border-bottom: 1px solid var(--line); }
+      .right { min-height: 42vh; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="left">
+      <header>
+        <div class="brand">
+          <h1>INGRES Assistant</h1>
+          <p>Groq-routed SQLite groundwater analytics</p>
+        </div>
+        <span class="status">Local DB</span>
+      </header>
+      <div id="thread">
+        <div class="msg bot">Ask for district comparisons, charts, or PDF summaries. Example: Generate a chart comparing the stage of groundwater extraction across the districts of Karnataka.</div>
+      </div>
+      <form class="composer" id="form">
+        <textarea id="input" placeholder="Ask about groundwater extraction..." required></textarea>
+        <button id="send" type="submit">Send</button>
+      </form>
+    </section>
+    <section class="right">
+      <div class="asset-header">
+        <h2>Generated Asset</h2>
+        <div class="downloads">
+          <a id="chartLink" class="download" download="groundwater-chart.png">Download Chart</a>
+          <a id="pdfLink" class="download" download="groundwater-report.pdf">Download PDF</a>
+        </div>
+      </div>
+      <div id="warning" class="warning"></div>
+      <div class="asset-frame">
+        <div id="placeholder" class="placeholder">
+          Charts and PDF reports generated by the server will appear here.
+        </div>
+        <img id="chart" alt="Generated groundwater chart" />
+      </div>
+    </section>
+  </main>
+  <script>
+    const form = document.getElementById("form");
+    const input = document.getElementById("input");
+    const send = document.getElementById("send");
+    const thread = document.getElementById("thread");
+    const chart = document.getElementById("chart");
+    const placeholder = document.getElementById("placeholder");
+    const chartLink = document.getElementById("chartLink");
+    const pdfLink = document.getElementById("pdfLink");
+    const warning = document.getElementById("warning");
+
+    function appendMessage(text, cls) {
+      const node = document.createElement("div");
+      node.className = `msg ${cls}`;
+      node.textContent = renderLightMarkdown(text);
+      thread.appendChild(node);
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function renderLightMarkdown(text) {
+      return String(text || "")
+        .replace(/^###\s*/gm, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .trim();
+    }
+
+    function resetAssets() {
+      chart.style.display = "none";
+      chart.removeAttribute("src");
+      placeholder.style.display = "block";
+      chartLink.style.display = "none";
+      pdfLink.style.display = "none";
+      warning.style.display = "none";
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const message = input.value.trim();
+      if (!message) return;
+
+      appendMessage(message, "user");
+      input.value = "";
+      send.disabled = true;
+      send.textContent = "Working";
+      resetAssets();
+
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+        const data = await response.json();
+        appendMessage(data.text || data.error || "No response.", "bot");
+
+        if (data.chartUrl) {
+          const url = `${data.chartUrl}?t=${Date.now()}`;
+          chart.src = url;
+          chart.style.display = "block";
+          placeholder.style.display = "none";
+          chartLink.href = url;
+          chartLink.style.display = "inline-flex";
+        }
+
+        if (data.pdfUrl) {
+          pdfLink.href = data.pdfUrl;
+          pdfLink.style.display = "inline-flex";
+        }
+
+        if (data.warning) {
+          warning.textContent = data.warning;
+          warning.style.display = "block";
+        }
+      } catch (err) {
+        appendMessage(`Request failed: ${err.message}`, "bot");
+      } finally {
+        send.disabled = false;
+        send.textContent = "Send";
+      }
+    });
+  </script>
+</body>
+</html>

@@ -31,3 +31,5 @@ __pycache__/
 # Local model artifacts
 training/gemma_groundwater/data/
 training/gemma_groundwater/out/
+groq_standalone/static/*.png
+groq_standalone/static/*.pdf
