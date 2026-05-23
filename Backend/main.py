@@ -128,12 +128,21 @@ semantic_search = SemanticSearch()
 
 # Database configuration
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
-DB_NAME = "ingres_db"
+DB_NAME = os.getenv("MONGODB_DB_NAME", "ingres_db")
+MONGODB_TIMEOUT_MS = int(os.getenv("MONGODB_TIMEOUT_MS", "5000"))
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "*").split(",")
+    if origin.strip()
+]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize MongoDB client
-    app.state.mongo_client = motor.motor_asyncio.AsyncIOMotorClient(MONGODB_URI)
+    app.state.mongo_client = motor.motor_asyncio.AsyncIOMotorClient(
+        MONGODB_URI,
+        serverSelectionTimeoutMS=MONGODB_TIMEOUT_MS,
+    )
     app.state.db = app.state.mongo_client[DB_NAME]
 
     # Initialize semantic search and cache locations
@@ -172,6 +181,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Error initializing: {e}")
     yield
+    app.state.mongo_client.close()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -331,8 +341,8 @@ def get_cached_news():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials="*" not in CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

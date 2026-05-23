@@ -1200,6 +1200,13 @@ button:not(.send-btn):active {
 }
 .risk-icon { background: #fef3c7; }
 .forecast-icon { background: #dbeafe; }
+.twin-icon {
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
 .pred-panel-header h3 {
   margin: 0 0 4px;
   font-size: 1.05rem;
@@ -1302,6 +1309,114 @@ button:not(.send-btn):active {
 }
 .ri-item span { font-size: 0.73rem; color: #94a3b8; }
 .ri-item strong { font-size: 0.88rem; color: #011627; }
+
+.digital-twin-panel {
+  grid-column: 1 / -1;
+}
+
+.twin-form-grid,
+.twin-slider-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.twin-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.twin-slider-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+
+.twin-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.twin-summary > div {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 72px;
+}
+
+.twin-summary strong {
+  color: #011627;
+  font-size: 0.98rem;
+}
+
+.twin-chart {
+  height: 300px;
+  margin-bottom: 16px;
+}
+
+.policy-levers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.policy-lever {
+  background: #f8fafc;
+  border-left: 4px solid #00A3E0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.policy-lever div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.policy-lever strong {
+  color: #011627;
+  font-size: 0.88rem;
+}
+
+.policy-lever span {
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.policy-lever b {
+  color: #00A3E0;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.twin-recommendation {
+  background: #ecfeff;
+  color: #0e7490;
+  border: 1px solid #a5f3fc;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.model-note {
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.error-note {
+  color: #dc2626;
+  margin-top: 10px;
+}
 
 /* ================== TRENDS ================== */
 .trend-controls {
@@ -1523,6 +1638,12 @@ button:not(.send-btn):active {
 @media (max-width: 900px) {
   .charts-row { grid-template-columns: 1fr; }
   .predictions-grid { grid-template-columns: 1fr; }
+  .twin-form-grid,
+  .twin-slider-grid,
+  .twin-summary,
+  .policy-levers {
+    grid-template-columns: 1fr;
+  }
   .trend-layout { grid-template-columns: 1fr; }
   .state-selector { max-height: 250px; }
   .tab-nav { overflow-x: auto; }

@@ -46,7 +46,9 @@ export default function Comparison() {
       });
       const data = await res.json();
       setResults(data.comparison || []);
-    } catch { }
+    } catch {
+      setResults([]);
+    }
     setLoading(false);
   };
 

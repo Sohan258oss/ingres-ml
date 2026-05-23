@@ -33,6 +33,20 @@ export default function Predictions() {
   const [predResult, setPredResult] = useState(null);
   const [predLoading, setPredLoading] = useState(false);
 
+  const [twinForm, setTwinForm] = useState({
+    state: "Punjab",
+    baseline_extraction_pct: 115,
+    start_year: 2024,
+    horizon_years: 8,
+    rainfall_scenario: "normal",
+    crop_shift_pct: 25,
+    recharge_structures_pct: 35,
+    pumping_reduction_pct: 15,
+    urban_permeability_pct: 10,
+  });
+  const [twinResult, setTwinResult] = useState(null);
+  const [twinLoading, setTwinLoading] = useState(false);
+
   const trendChartRef = useRef(null);
 
   const predictRisk = async () => {
@@ -63,6 +77,20 @@ export default function Predictions() {
     setPredLoading(false);
   };
 
+  const simulateDigitalTwin = async () => {
+    setTwinLoading(true);
+    setTwinResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/ml/simulate-digital-twin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(twinForm),
+      });
+      setTwinResult(await res.json());
+    } catch { setTwinResult({ error: "Request failed" }); }
+    setTwinLoading(false);
+  };
+
   const trendChartData = predResult?.trend_forecast ? {
     labels: predResult.trend_forecast.map(t => t.year),
     datasets: [{
@@ -88,10 +116,50 @@ export default function Predictions() {
     }]
   } : null;
 
-  const hasResults = (riskResult && !riskResult.error) || (predResult && !predResult.error);
+  const twinChartData = twinResult?.intervention_series ? {
+    labels: twinResult.intervention_series.map(t => t.year),
+    datasets: [
+      {
+        label: "Baseline",
+        data: twinResult.baseline_series.map(t => t.extraction),
+        borderColor: "#e74c3c",
+        backgroundColor: "rgba(231,76,60,0.08)",
+        borderDash: [6, 5],
+        tension: 0.35,
+        pointRadius: 3,
+      },
+      {
+        label: "Scenario",
+        data: twinResult.intervention_series.map(t => t.extraction),
+        borderColor: "#00A3E0",
+        backgroundColor: "rgba(0,163,224,0.14)",
+        fill: true,
+        tension: 0.35,
+        pointRadius: 4,
+      },
+      {
+        label: "Low band",
+        data: twinResult.intervention_series.map(t => t.low),
+        borderColor: "rgba(0,163,224,0.16)",
+        backgroundColor: "rgba(0,163,224,0.05)",
+        pointRadius: 0,
+        tension: 0.35,
+      },
+      {
+        label: "High band",
+        data: twinResult.intervention_series.map(t => t.high),
+        borderColor: "rgba(0,163,224,0.16)",
+        backgroundColor: "rgba(0,163,224,0.05)",
+        pointRadius: 0,
+        tension: 0.35,
+      },
+    ]
+  } : null;
+
+  const hasExportableResults = (riskResult && !riskResult.error) || (predResult && !predResult.error);
   const exportState = riskForm.state || predForm.state;
 
-  const exportOptions = hasResults ? [
+  const exportOptions = hasExportableResults ? [
     {
       id: "pdf",
       type: "pdf",
@@ -120,7 +188,7 @@ export default function Predictions() {
           <h1>ML Predictions</h1>
           <p>Predict groundwater risk category and future extraction levels using trained ML models</p>
         </div>
-        {hasResults && <ExportMenu options={exportOptions} />}
+        {hasExportableResults && <ExportMenu options={exportOptions} />}
       </div>
 
       <div className="predictions-grid">
@@ -246,6 +314,133 @@ export default function Predictions() {
               </div>
             </div>
           )}
+        </div>
+
+        <div className="pred-panel digital-twin-panel">
+          <div className="pred-panel-header">
+            <div className="pred-icon twin-icon">DT</div>
+            <div>
+              <h3>Scenario Digital Twin</h3>
+              <p>Hydro-balance simulator for intervention planning</p>
+            </div>
+          </div>
+
+          <div className="twin-form-grid">
+            <div className="form-group">
+              <label>State</label>
+              <select value={twinForm.state} onChange={e => setTwinForm(f => ({ ...f, state: e.target.value }))}>
+                {STATES.map(s => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Rainfall Scenario</label>
+              <select value={twinForm.rainfall_scenario} onChange={e => setTwinForm(f => ({ ...f, rainfall_scenario: e.target.value }))}>
+                <option value="dry">Dry monsoon</option>
+                <option value="normal">Normal monsoon</option>
+                <option value="wet">Wet monsoon</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="twin-slider-grid">
+            <div className="form-group">
+              <label>Baseline Extraction: <strong>{twinForm.baseline_extraction_pct}%</strong></label>
+              <input type="range" min="10" max="220" step="1" value={twinForm.baseline_extraction_pct}
+                onChange={e => setTwinForm(f => ({ ...f, baseline_extraction_pct: parseFloat(e.target.value) }))}
+                className="slider" />
+            </div>
+            <div className="form-group">
+              <label>Horizon: <strong>{twinForm.horizon_years} years</strong></label>
+              <input type="range" min="3" max="15" step="1" value={twinForm.horizon_years}
+                onChange={e => setTwinForm(f => ({ ...f, horizon_years: parseInt(e.target.value) }))}
+                className="slider" />
+            </div>
+            <div className="form-group">
+              <label>Crop Shift: <strong>{twinForm.crop_shift_pct}%</strong></label>
+              <input type="range" min="0" max="80" step="5" value={twinForm.crop_shift_pct}
+                onChange={e => setTwinForm(f => ({ ...f, crop_shift_pct: parseFloat(e.target.value) }))}
+                className="slider" />
+            </div>
+            <div className="form-group">
+              <label>Recharge Structures: <strong>{twinForm.recharge_structures_pct}%</strong></label>
+              <input type="range" min="0" max="100" step="5" value={twinForm.recharge_structures_pct}
+                onChange={e => setTwinForm(f => ({ ...f, recharge_structures_pct: parseFloat(e.target.value) }))}
+                className="slider" />
+            </div>
+            <div className="form-group">
+              <label>Pumping Reduction: <strong>{twinForm.pumping_reduction_pct}%</strong></label>
+              <input type="range" min="0" max="70" step="5" value={twinForm.pumping_reduction_pct}
+                onChange={e => setTwinForm(f => ({ ...f, pumping_reduction_pct: parseFloat(e.target.value) }))}
+                className="slider" />
+            </div>
+            <div className="form-group">
+              <label>Urban Permeability: <strong>{twinForm.urban_permeability_pct}%</strong></label>
+              <input type="range" min="0" max="70" step="5" value={twinForm.urban_permeability_pct}
+                onChange={e => setTwinForm(f => ({ ...f, urban_permeability_pct: parseFloat(e.target.value) }))}
+                className="slider" />
+            </div>
+          </div>
+
+          <button className="pred-btn" onClick={simulateDigitalTwin} disabled={twinLoading}>
+            {twinLoading ? <span className="btn-loader"></span> : "Simulate Scenario"}
+          </button>
+
+          {twinResult && !twinResult.error && (
+            <div className="pred-result twin-result">
+              <div className="twin-summary">
+                <div>
+                  <span className="result-cat-label">Aquifer profile</span>
+                  <strong>{twinResult.aquifer_profile}</strong>
+                </div>
+                <div>
+                  <span className="result-cat-label">Avoided pressure</span>
+                  <strong>{twinResult.impact?.avoided_extraction_pct_points} pts</strong>
+                </div>
+                <div>
+                  <span className="result-cat-label">Final status</span>
+                  <strong style={{ color: twinResult.color }}>{twinResult.impact?.intervention_final_category}</strong>
+                </div>
+                <div>
+                  <span className="result-cat-label">Recovery year</span>
+                  <strong>{twinResult.impact?.intervention_recovery_year || "Not reached"}</strong>
+                </div>
+              </div>
+
+              {twinChartData && (
+                <div className="twin-chart">
+                  <Line data={twinChartData} options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: "bottom" } },
+                    scales: {
+                      y: { ticks: { callback: v => `${v}%` }, grid: { color: "rgba(0,0,0,0.05)" } },
+                      x: { grid: { display: false } }
+                    }
+                  }} />
+                </div>
+              )}
+
+              <div className="policy-levers">
+                {twinResult.policy_levers?.map(lever => (
+                  <div className="policy-lever" key={lever.name}>
+                    <div>
+                      <strong>{lever.name}</strong>
+                      <span>{lever.interpretation}</span>
+                    </div>
+                    <b>{lever.score}</b>
+                  </div>
+                ))}
+              </div>
+
+              <div className="twin-recommendation">
+                {twinResult.recommendation}
+              </div>
+              <div className="model-note">{twinResult.method}</div>
+            </div>
+          )}
+
+          {twinResult?.error && <div className="model-note error-note">{twinResult.error}</div>}
         </div>
       </div>
     </div>

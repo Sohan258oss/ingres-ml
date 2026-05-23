@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import motor.motor_asyncio
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
@@ -53,6 +54,18 @@ class ExtractionPredictRequest(BaseModel):
     population_density: Optional[float] = None
 
 
+class DigitalTwinRequest(BaseModel):
+    state: str
+    baseline_extraction_pct: Optional[float] = None
+    start_year: int = 2024
+    horizon_years: int = 8
+    rainfall_scenario: str = "normal"
+    crop_shift_pct: float = 20
+    recharge_structures_pct: float = 35
+    pumping_reduction_pct: float = 15
+    urban_permeability_pct: float = 10
+
+
 class CompareRequest(BaseModel):
     locations: List[str]
 
@@ -67,6 +80,26 @@ def load_training_summary():
         with open(path) as f:
             return json.load(f)
     return {}
+
+
+async def get_state_average_extraction(request: Request, state: str):
+    db = get_db(request)
+    assessments_coll = db.assessments
+    sample = await assessments_coll.find_one()
+    if not sample:
+        return None
+
+    cols = list(sample.keys())
+    state_col = next((c for c in cols if "state" in c.lower()), "state")
+    extr_col = next((c for c in cols if "extract" in c.lower()), "extraction")
+    pipeline = [
+        {"$match": {state_col: {"$regex": f"^{re.escape(state)}$", "$options": "i"}}},
+        {"$group": {"_id": None, "avg_extraction": {"$avg": f"${extr_col}"}}},
+    ]
+    agg_res = await assessments_coll.aggregate(pipeline).to_list(1)
+    if not agg_res:
+        return None
+    return float(agg_res[0].get("avg_extraction") or 0)
 
 
 @router.post("/predict-risk")
@@ -138,6 +171,30 @@ async def predict_groundwater(req: ExtractionPredictRequest):
             "population_density": round(pop_density, 1),
         }
     }
+
+
+@router.post("/simulate-digital-twin")
+async def simulate_digital_twin(request: Request, req: DigitalTwinRequest):
+    from ml.digital_twin import simulate_groundwater_digital_twin
+
+    baseline = req.baseline_extraction_pct
+    if baseline is None:
+        baseline = await get_state_average_extraction(request, req.state)
+
+    if baseline is None or baseline <= 0:
+        return {"error": "No baseline extraction found. Provide baseline_extraction_pct."}
+
+    return simulate_groundwater_digital_twin(
+        state=req.state,
+        baseline_extraction=baseline,
+        start_year=req.start_year,
+        horizon_years=req.horizon_years,
+        rainfall_scenario=req.rainfall_scenario,
+        crop_shift_pct=req.crop_shift_pct,
+        recharge_structures_pct=req.recharge_structures_pct,
+        pumping_reduction_pct=req.pumping_reduction_pct,
+        urban_permeability_pct=req.urban_permeability_pct,
+    )
 
 
 @router.get("/top-risk-districts")

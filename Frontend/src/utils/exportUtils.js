@@ -107,20 +107,6 @@ function addFooter(doc, pageNum) {
   doc.text(`Page ${pageNum}`, W - 14, H - 4, { align: "right" });
 }
 
-function addCategoryBadge(doc, x, y, category) {
-  const rgb = getCategoryRgb(category);
-  const w = doc.getTextWidth(category) + 6;
-  doc.setFillColor(rgb[0], rgb[1], rgb[2], 0.15);
-  doc.setFillColor(rgb[0] + 180, rgb[1] + 60, rgb[2] + 60);
-  doc.setFillColor(...rgb.map(v => Math.min(255, v + 150)));
-  doc.roundedRect(x, y - 4, w, 6, 1.5, 1.5, "F");
-  doc.setTextColor(...rgb);
-  doc.setFontSize(7.5);
-  doc.setFont("helvetica", "bold");
-  doc.text(category, x + 3, y);
-  return x + w + 4;
-}
-
 async function captureChart(canvasRef) {
   if (!canvasRef || !canvasRef.current) return null;
   try {

@@ -123,7 +123,7 @@ export default function TrendAnalysis() {
         <div className="state-selector">
           <h4>Select States ({selected.length} selected)</h4>
           <div className="state-list">
-            {filteredTrends.map((t, i) => {
+            {filteredTrends.map((t) => {
               const isSelected = selected.includes(t.state);
               const colorIdx = selected.indexOf(t.state);
               return (

@@ -9,3 +9,6 @@ huggingface_hub
 duckduckgo_search
 motor
 pymongo
+numpy
+scikit-learn
+joblib
