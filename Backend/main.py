@@ -456,6 +456,13 @@ KNOWLEDGE_BASE = {
     "ph value": "The pH of water is a measure of how acidic/basic water is.",
     "tds": "Total Dissolved Solids (TDS) is a measure of the dissolved combined content of all inorganic and organic substances present in a liquid.",
     "dissolved oxygen": "Dissolved oxygen (DO) is the amount of gaseous oxygen (O2) dissolved in the water.",
+    "agriculture": "Agriculture is the practice of cultivating plants and raising livestock for food, fiber, and other products. In India, agriculture is the single largest consumer of groundwater, accounting for nearly 90% of all groundwater extraction — primarily for irrigation of crops like rice, wheat, and sugarcane.",
+    "groundwater depletion": "Groundwater depletion occurs when water is withdrawn from underground aquifers faster than it is naturally replenished. Major causes include over-irrigation, urbanization that reduces recharge areas, and industrial extraction. Prolonged depletion can lead to land subsidence, drying of wells, and permanent loss of aquifer storage capacity.",
+    "rainfall recharge": "Rainfall recharge is the natural process by which rainwater percolates through the soil and rock layers to replenish underground aquifers. The amount of recharge depends on factors like rainfall intensity, soil type, land use, and vegetation cover. In India, most groundwater recharge happens during the monsoon season (June–September).",
+    "water conservation": "Water conservation refers to the strategies and practices aimed at reducing water usage, preventing wastage, and protecting water resources for future generations. It is essential because freshwater is a finite resource — only about 1% of Earth's water is accessible for human use. Key methods include rainwater harvesting, efficient irrigation, wastewater recycling, and reducing household leaks.",
+    "water scarcity": "Water scarcity occurs when the demand for water exceeds the available supply in a region. Causes include over-extraction of groundwater, climate change reducing rainfall patterns, population growth, pollution of freshwater sources, and inefficient agricultural practices. India faces significant water scarcity, with NITI Aayog reporting that 21 major cities could run out of groundwater in the near future.",
+    "sustainable groundwater management": "Sustainable groundwater management involves using groundwater resources at a rate that does not exceed the natural recharge rate, ensuring long-term availability. Key practices include: community-based water monitoring, crop diversification to reduce irrigation demand, artificial recharge structures (check dams, percolation tanks), regulatory frameworks for borewell drilling, and adoption of water-efficient technologies like drip irrigation.",
+    "water cycle": "The water cycle (hydrological cycle) is the continuous movement of water within the Earth and atmosphere. It includes evaporation from water bodies, transpiration from plants, condensation into clouds, precipitation as rain or snow, surface runoff, and infiltration into groundwater. Understanding the water cycle is fundamental to managing water resources sustainably.",
 }
 
 # -------------------- CONTAMINANTS --------------------
@@ -639,6 +646,106 @@ def get_suggestions(user_input, found_data=None):
             seen.add(s.lower())
     return unique[:3]
 
+# -------------------- FUZZY MATCHING --------------------
+def _char_ratio(a: str, b: str) -> float:
+    """Lightweight character-level similarity (0-1). No external deps."""
+    if not a or not b:
+        return 0.0
+    a, b = a.lower(), b.lower()
+    if a == b:
+        return 1.0
+    # Bigram overlap (Dice coefficient)
+    def bigrams(s):
+        return set(s[i:i+2] for i in range(len(s)-1)) if len(s) > 1 else {s}
+    ba, bb = bigrams(a), bigrams(b)
+    overlap = ba & bb
+    return (2.0 * len(overlap)) / (len(ba) + len(bb)) if (ba or bb) else 0.0
+
+def fuzzy_match_key(query: str, dictionary: dict, threshold: float = 0.55) -> str | None:
+    """Find the best fuzzy-matching key in a dictionary for a query string."""
+    query_lower = query.lower().strip()
+    best_key = None
+    best_score = 0.0
+    for key in dictionary:
+        # Check if key appears as substring
+        if key in query_lower or query_lower in key:
+            return key
+        # Check individual words
+        for word in query_lower.split():
+            score = _char_ratio(word, key)
+            if score > best_score:
+                best_score = score
+                best_key = key
+        # Also check full query vs key
+        full_score = _char_ratio(query_lower, key)
+        if full_score > best_score:
+            best_score = full_score
+            best_key = key
+    return best_key if best_score >= threshold else None
+
+# -------------------- GREETING DETECTION --------------------
+GREETING_PATTERNS = [
+    "hi", "hello", "hey", "hii", "hiii", "helloo", "helo",
+    "good morning", "good afternoon", "good evening", "good night",
+    "howdy", "greetings", "namaste", "namaskar",
+    "what's up", "whats up", "wassup", "sup",
+]
+GREETING_RESPONSES = [
+    "Hello! I'm **INGRES**, your AI-powered groundwater intelligence assistant.\n\nI can help you with:\n- **Groundwater data** for any Indian state or district\n- **Educational questions** like 'What is an aquifer?'\n- **Comparisons** between regions\n- **Conservation tips** and solutions\n\nWhat would you like to explore today?",
+    "Hey there! Welcome to **INGRES** - India's groundwater intelligence system.\n\nFeel free to ask me anything about:\n- Water levels in any state or district\n- Definitions of water-related terms\n- Why certain regions are stressed\n- Tips for water conservation\n\nHow can I help you?",
+    "Namaste! I'm **INGRES**, here to help you understand India's groundwater.\n\nTry asking me:\n- 'What is groundwater depletion?'\n- 'Compare Punjab and Bihar'\n- 'Why is Rajasthan stressed?'\n- 'Conservation tips'\n\nWhat would you like to know?",
+]
+
+def detect_greeting(user_input: str) -> bool:
+    """Check if the user input is a greeting."""
+    cleaned = user_input.strip().lower().rstrip("!?.")
+    # Exact match
+    if cleaned in GREETING_PATTERNS:
+        return True
+    # Starts with greeting word
+    for g in GREETING_PATTERNS:
+        if cleaned.startswith(g + " ") or cleaned == g:
+            return True
+    return False
+
+# -------------------- DEFINITION INTENT --------------------
+DEFINITION_PREFIXES = [
+    "what is", "what are", "what's", "whats",
+    "define", "explain", "tell me about",
+    "meaning of", "definition of",
+    "what do you mean by", "describe",
+    "how does", "how do",
+]
+
+def extract_definition_subject(user_input: str) -> str | None:
+    """Extract the subject from a definition query like 'what is groundwater?'"""
+    cleaned = user_input.strip().lower().rstrip("?!.")
+    for prefix in DEFINITION_PREFIXES:
+        if cleaned.startswith(prefix):
+            subject = cleaned[len(prefix):].strip()
+            # Remove articles
+            for article in ["a ", "an ", "the "]:
+                if subject.startswith(article):
+                    subject = subject[len(article):]
+            return subject if subject else None
+    return None
+
+# -------------------- THANK-YOU / BYE DETECTION --------------------
+THANK_PATTERNS = ["thank", "thanks", "thankyou", "thank you", "thx", "thnks", "ty"]
+BYE_PATTERNS = ["bye", "goodbye", "see you", "exit", "quit", "close"]
+
+def detect_thanks(user_input: str) -> bool:
+    cleaned = user_input.strip().lower().rstrip("!?.")
+    # Use word-boundary matching to avoid false positives (e.g. 'scarcity' matching 'ty')
+    for t in THANK_PATTERNS:
+        if re.search(rf'\b{re.escape(t)}\b', cleaned):
+            return True
+    return False
+
+def detect_bye(user_input: str) -> bool:
+    cleaned = user_input.strip().lower().rstrip("!?.")
+    return any(b in cleaned for b in BYE_PATTERNS)
+
 # -------------------- VISUAL UTILS --------------------
 ACTION_KEYWORDS = ["reduce", "how to", "solution", "steps", "ways", "minimize", "conserve", "prevent", "action", "improvement", "management", "reduction", "curb", "save"]
 CAUSE_KEYWORDS = ["why", "cause", "reason", "factor", "trigger", "drivers", "stressed"]
@@ -722,6 +829,7 @@ def get_visual_data(visual_type, data, context=None):
 
 # -------------------- MAIN API --------------------
 async def get_rule_based_response(user_input: str, request: Request):
+    import random
     is_map_requested = detect_map_request(user_input)
 
     # Normalize terms
@@ -733,6 +841,52 @@ async def get_rule_based_response(user_input: str, request: Request):
     for k, v in SYNONYMS.items():
         user_input = user_input.replace(k, v)
 
+    # --- 0. GREETING DETECTION (highest priority) ---
+    if detect_greeting(user_input):
+        return {
+            "text": random.choice(GREETING_RESPONSES),
+            "chartData": [],
+            "suggestions": ["What is groundwater?", "Compare Punjab and Bihar", "Conservation tips"],
+            "skip_llm": True
+        }
+
+    # --- 0b. THANK-YOU / BYE DETECTION ---
+    if detect_thanks(user_input):
+        return {
+            "text": "You're welcome! Feel free to ask me anything else about groundwater, water conservation, or India's water resources. I'm always here to help!",
+            "chartData": [],
+            "suggestions": ["What is an aquifer?", "Show India map", "Conservation tips"],
+            "skip_llm": True
+        }
+    if detect_bye(user_input):
+        return {
+            "text": "Goodbye! Remember - every drop counts! Feel free to come back anytime you have questions about groundwater.",
+            "chartData": [],
+            "suggestions": [],
+            "skip_llm": True
+        }
+
+    # --- 0c. DIRECT DEFINITION INTENT ---
+    definition_subject = extract_definition_subject(user_input)
+    if definition_subject:
+        # First try exact match in KNOWLEDGE_BASE
+        if definition_subject in KNOWLEDGE_BASE:
+            layered_text = format_layered_response(definition_subject, KNOWLEDGE_BASE[definition_subject])
+            return {
+                "text": f"### {definition_subject.title()}\n\n{layered_text}",
+                "chartData": [],
+                "suggestions": get_suggestions(user_input)
+            }
+        # Then try fuzzy match
+        fuzzy_key = fuzzy_match_key(definition_subject, KNOWLEDGE_BASE, threshold=0.50)
+        if fuzzy_key:
+            layered_text = format_layered_response(fuzzy_key, KNOWLEDGE_BASE[fuzzy_key])
+            return {
+                "text": f"### {fuzzy_key.title()}\n\n{layered_text}",
+                "chartData": [],
+                "suggestions": get_suggestions(user_input)
+            }
+
     # YES/NO flow
     if user_input in ["yes", "show chart", "sure", "ok"]:
         if last_data_cache["data"]:
@@ -742,14 +896,14 @@ async def get_rule_based_response(user_input: str, request: Request):
             v_data = get_visual_data(v_type, data if len(data) > 1 else data[0])
             last_data_cache["data"] = []
             return {
-                "text": f"Here’s a visual breakdown of the data:\n\n{explanation}",
+                "text": f"Here's a visual breakdown of the data:\n\n{explanation}",
                 "chartData": data,
                 "visualType": v_type,
                 "visualData": v_data,
                 "suggestions": get_suggestions(user_input, data)
             }
         return {
-            "text": "I don’t have any prepared data yet.",
+            "text": "I don't have any prepared data yet.",
             "chartData": [],
             "suggestions": get_suggestions(user_input)
         }
@@ -1002,13 +1156,31 @@ async def get_rule_based_response(user_input: str, request: Request):
                 "suggestions": get_suggestions(user_input)
             }
 
-    # 6. Confidence Threshold Fallback: News Scraper (Priority 4)
+    # 6. FUZZY FALLBACK: Try matching against knowledge base / tips with typo tolerance
+    fuzzy_kb_key = fuzzy_match_key(user_input, KNOWLEDGE_BASE, threshold=0.50)
+    if fuzzy_kb_key:
+        layered_text = format_layered_response(fuzzy_kb_key, KNOWLEDGE_BASE[fuzzy_kb_key])
+        return {
+            "text": f"### {fuzzy_kb_key.title()}\n\n{layered_text}",
+            "chartData": [],
+            "suggestions": get_suggestions(user_input)
+        }
+
+    fuzzy_tip_key = fuzzy_match_key(user_input, TIPS, threshold=0.50)
+    if fuzzy_tip_key:
+        return {
+            "text": f"### {fuzzy_tip_key.title()} Tip\n\n{TIPS[fuzzy_tip_key]}",
+            "chartData": [],
+            "suggestions": get_suggestions(user_input)
+        }
+
+    # 7. News Fallback (Priority 5)
     news = await run_in_threadpool(get_latest_news)
     news_str = "\n".join([f"• {item}" for item in news])
     return {
-        "text": f"I couldn't find specific data for your query, but here are the latest groundwater updates:\n\n{news_str}",
+        "text": f"I couldn't find specific data for your query, but here are the latest groundwater updates:\n\n{news_str}\n\n💡 **Tip:** Try asking me specific questions like:\n• 'What is groundwater?'\n• 'Compare Punjab and Bihar'\n• 'Why is Rajasthan stressed?'\n• 'Conservation tips'",
         "chartData": [],
-        "suggestions": get_suggestions(user_input)
+        "suggestions": ["What is groundwater?", "Conservation tips", "Show India map"]
     }
 
 @app.post("/ask")
@@ -1020,6 +1192,22 @@ async def ask_bot(item: WaterQuery, request: Request):
     context = base_response.get("text", "")
 
     if item.stream:
+        # Skip LLM for direct responses (greetings, thanks, bye)
+        if base_response.get("skip_llm"):
+            async def direct_stream():
+                for ch in context:
+                    yield f"data: {json.dumps({'t': ch})}\n\n"
+                    await asyncio.sleep(0.008)
+                metadata = {
+                    "visualType": base_response.get("visualType"),
+                    "visualData": base_response.get("visualData"),
+                    "chartData": base_response.get("chartData"),
+                    "imageUrl": base_response.get("imageUrl"),
+                    "showLegend": base_response.get("showLegend"),
+                    "suggestions": base_response.get("suggestions")
+                }
+                yield f"data: {json.dumps({'m': metadata})}\n\n"
+            return StreamingResponse(direct_stream(), media_type="text/event-stream")
         async def stream_generator():
             full_text = ""
             try:
@@ -1052,6 +1240,10 @@ async def ask_bot(item: WaterQuery, request: Request):
 
     else:
         # Non-streaming path
+        # Skip LLM for direct responses (greetings, thanks, bye)
+        if base_response.get("skip_llm"):
+            return base_response
+
         full_text = ""
         try:
             async for token in get_smart_response(item.message, context):
@@ -1062,6 +1254,17 @@ async def ask_bot(item: WaterQuery, request: Request):
         # Fallback to rule-based text if LLM fails or returns empty
         if full_text.strip():
             base_response["text"] = full_text
+
+        # SAFETY: Ensure we never return an empty response
+        if not base_response.get("text", "").strip():
+            base_response["text"] = (
+                "I'm sorry, I couldn't generate a response for that query. "
+                "Please try rephrasing your question, or ask me about:\n\n"
+                "• Groundwater levels in any Indian state\n"
+                "• Water-related definitions (e.g., 'What is an aquifer?')\n"
+                "• Conservation tips and solutions"
+            )
+            base_response["suggestions"] = ["What is groundwater?", "Conservation tips", "Show India map"]
 
         return base_response
 

@@ -159,8 +159,21 @@ export default function App() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const formatText = (text) =>
-    text.replace(/\*\*(.*?)\*\*/g, "$1").replace(/###\s*(.*?)(\n|$)/g, "$1$2").replace(/\n\n/g, "\n").trim();
+  const formatText = (text) => {
+    if (!text) return "";
+    let html = text
+      // Headings: ### Title
+      .replace(/###\s*(.*?)(?:\n|$)/g, '<div class="bot-heading">$1</div>')
+      // Bold: **text**
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // Bullet points: • item or * item or - item (at start of line)
+      .replace(/^[•\*\-]\s+(.+)$/gm, '<li>$1</li>')
+      // Wrap consecutive <li> in <ul>
+      .replace(/(<li>.*?<\/li>\n?)+/gs, (match) => `<ul class="bot-list">${match}</ul>`)
+      // Line breaks
+      .replace(/\n/g, '<br/>');
+    return html;
+  };
 
   return (
     <div className="app">
@@ -224,9 +237,13 @@ export default function App() {
             )}
 
             {messages.map((m, i) => (
-              <div key={i} className={`msg ${m.type}`}>
+              <div key={i} className={`msg ${m.type} msg-animate`}>
+                {m.type === "bot" && <div className="bot-avatar">🌊</div>}
                 <div className="bubble">
-                  {m.type === "bot" ? formatText(m.text) : m.text}
+                  {m.type === "bot"
+                    ? <div className="bot-text-content" dangerouslySetInnerHTML={{ __html: formatText(m.text) }} />
+                    : m.text
+                  }
                 </div>
 
                 {m.type === "bot" && m.imageUrl && (
@@ -357,11 +374,14 @@ export default function App() {
             ))}
 
             {loading && (
-              <div className="msg bot">
+              <div className="msg bot msg-animate">
+                <div className="bot-avatar">🌊</div>
                 <div className="bubble">
-                  <div className="water-loader-container">
-                    <div className="water-loader"></div>
-                    <span className="loading-text">Analyzing groundwater data…</span>
+                  <div className="typing-indicator">
+                    <div className="typing-dots">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span className="loading-text">INGRES is thinking…</span>
                   </div>
                 </div>
               </div>
