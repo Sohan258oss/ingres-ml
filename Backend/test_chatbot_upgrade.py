@@ -112,7 +112,9 @@ class TestDefinitionExtraction:
 
     def test_no_subject(self):
         assert extract_definition_subject("show me data") is None
-        assert extract_definition_subject("why is Punjab stressed") is None
+        # "why is" is a valid definition prefix, so it extracts a subject
+        # (which won't match KB, so it falls through to location handling)
+        assert extract_definition_subject("why is Punjab stressed") == "punjab stressed"
 
 
 class TestFuzzyMatching:

@@ -710,23 +710,29 @@ def detect_greeting(user_input: str) -> bool:
 
 # -------------------- DEFINITION INTENT --------------------
 DEFINITION_PREFIXES = [
+    # Longest prefixes first to avoid partial matches
+    "what do you mean by",
+    "what causes", "what cause",
+    "tell me about",
+    "definition of", "meaning of",
     "what is", "what are", "what's", "whats",
-    "define", "explain", "tell me about",
-    "meaning of", "definition of",
-    "what do you mean by", "describe",
-    "how does", "how do",
+    "define", "explain", "describe",
+    "how does", "how do", "how is",
+    "why is", "why are", "why does",
 ]
 
 def extract_definition_subject(user_input: str) -> str | None:
     """Extract the subject from a definition query like 'what is groundwater?'"""
     cleaned = user_input.strip().lower().rstrip("?!.")
     for prefix in DEFINITION_PREFIXES:
-        if cleaned.startswith(prefix):
+        if cleaned.startswith(prefix + " ") or cleaned == prefix:
             subject = cleaned[len(prefix):].strip()
             # Remove articles
             for article in ["a ", "an ", "the "]:
                 if subject.startswith(article):
                     subject = subject[len(article):]
+            if subject:
+                print(f"[INTENT] Definition detected -- prefix='{prefix}', subject='{subject}'")
             return subject if subject else None
     return None
 
@@ -866,26 +872,49 @@ async def get_rule_based_response(user_input: str, request: Request):
             "skip_llm": True
         }
 
-    # --- 0c. DIRECT DEFINITION INTENT ---
+    # --- 0c. DIRECT DEFINITION INTENT (HIGHEST PRIORITY for educational queries) ---
     definition_subject = extract_definition_subject(user_input)
     if definition_subject:
         # First try exact match in KNOWLEDGE_BASE
         if definition_subject in KNOWLEDGE_BASE:
+            print(f"[KB-HIT] Exact match: '{definition_subject}' found in KNOWLEDGE_BASE")
             layered_text = format_layered_response(definition_subject, KNOWLEDGE_BASE[definition_subject])
             return {
                 "text": f"### {definition_subject.title()}\n\n{layered_text}",
                 "chartData": [],
-                "suggestions": get_suggestions(user_input)
+                "suggestions": get_suggestions(user_input),
+                "skip_llm": True
             }
         # Then try fuzzy match
         fuzzy_key = fuzzy_match_key(definition_subject, KNOWLEDGE_BASE, threshold=0.50)
         if fuzzy_key:
+            print(f"[KB-HIT] Fuzzy match: '{definition_subject}' -> '{fuzzy_key}' in KNOWLEDGE_BASE")
             layered_text = format_layered_response(fuzzy_key, KNOWLEDGE_BASE[fuzzy_key])
             return {
                 "text": f"### {fuzzy_key.title()}\n\n{layered_text}",
                 "chartData": [],
-                "suggestions": get_suggestions(user_input)
+                "suggestions": get_suggestions(user_input),
+                "skip_llm": True
             }
+        # Check TIPS too for definition-style queries
+        if definition_subject in TIPS:
+            print(f"[KB-HIT] Exact match: '{definition_subject}' found in TIPS")
+            return {
+                "text": f"### {definition_subject.title()}\n\n{TIPS[definition_subject]}",
+                "chartData": [],
+                "suggestions": get_suggestions(user_input),
+                "skip_llm": True
+            }
+        fuzzy_tip = fuzzy_match_key(definition_subject, TIPS, threshold=0.50)
+        if fuzzy_tip:
+            print(f"[KB-HIT] Fuzzy match: '{definition_subject}' -> '{fuzzy_tip}' in TIPS")
+            return {
+                "text": f"### {fuzzy_tip.title()}\n\n{TIPS[fuzzy_tip]}",
+                "chartData": [],
+                "suggestions": get_suggestions(user_input),
+                "skip_llm": True
+            }
+        print(f"[KB-MISS] No match for definition subject: '{definition_subject}'")
 
     # YES/NO flow
     if user_input in ["yes", "show chart", "sure", "ok"]:
@@ -1030,13 +1059,15 @@ async def get_rule_based_response(user_input: str, request: Request):
 
         # --- D. CHECK KNOWLEDGE BASE (Definitions) ---
         if match_key in KNOWLEDGE_BASE:
+            print(f"[KB-HIT] Semantic→KB match: '{match_key}' found in KNOWLEDGE_BASE")
             img_url = await run_in_threadpool(get_image_url, best_match) if is_map_requested else None
             layered_text = format_layered_response(best_match, KNOWLEDGE_BASE[match_key])
             return {
                 "text": f"### {best_match.title()}\n\n{layered_text}",
                 "chartData": [],
                 "imageUrl": img_url,
-                "suggestions": get_suggestions(user_input)
+                "suggestions": get_suggestions(user_input),
+                "skip_llm": True
             }
 
         # 5. Data Lookup: Location (Priority 3)
@@ -1159,19 +1190,23 @@ async def get_rule_based_response(user_input: str, request: Request):
     # 6. FUZZY FALLBACK: Try matching against knowledge base / tips with typo tolerance
     fuzzy_kb_key = fuzzy_match_key(user_input, KNOWLEDGE_BASE, threshold=0.50)
     if fuzzy_kb_key:
+        print(f"[FUZZY-HIT] Fallback fuzzy KB match: '{user_input}' -> '{fuzzy_kb_key}'")
         layered_text = format_layered_response(fuzzy_kb_key, KNOWLEDGE_BASE[fuzzy_kb_key])
         return {
             "text": f"### {fuzzy_kb_key.title()}\n\n{layered_text}",
             "chartData": [],
-            "suggestions": get_suggestions(user_input)
+            "suggestions": get_suggestions(user_input),
+            "skip_llm": True
         }
 
     fuzzy_tip_key = fuzzy_match_key(user_input, TIPS, threshold=0.50)
     if fuzzy_tip_key:
+        print(f"[FUZZY-HIT] Fallback fuzzy TIPS match: '{user_input}' -> '{fuzzy_tip_key}'")
         return {
             "text": f"### {fuzzy_tip_key.title()} Tip\n\n{TIPS[fuzzy_tip_key]}",
             "chartData": [],
-            "suggestions": get_suggestions(user_input)
+            "suggestions": get_suggestions(user_input),
+            "skip_llm": True
         }
 
     # 7. News Fallback (Priority 5)
