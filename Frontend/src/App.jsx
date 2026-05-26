@@ -22,12 +22,12 @@ import "./App.css";
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend);
 
 const TABS = [
-  { id: "chat",       label: "💬 Chat",       icon: "💬" },
-  { id: "dashboard",  label: "📊 Dashboard",  icon: "📊" },
-  { id: "predict",    label: "🎯 Predictions", icon: "🎯" },
-  { id: "trends",     label: "📈 Trends",     icon: "📈" },
-  { id: "compare",    label: "⚖️ Compare",    icon: "⚖️" },
-  { id: "map",        label: "🗺️ India Map",  icon: "🗺️" },
+  { id: "chat", label: "💬 Chat", icon: "💬" },
+  { id: "dashboard", label: "📊 Dashboard", icon: "📊" },
+  { id: "predict", label: "🎯 Predictions", icon: "🎯" },
+  { id: "trends", label: "📈 Trends", icon: "📈" },
+  { id: "compare", label: "⚖️ Compare", icon: "⚖️" },
+  { id: "map", label: "🗺️ India Map", icon: "🗺️" },
 ];
 
 export default function App() {
@@ -96,12 +96,21 @@ export default function App() {
     setInput("");
     setLoading(true);
 
+    // Timeout safety: abort fetch after 45 seconds
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+
     try {
       const response = await fetch(`${API_BASE}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg, stream: true })
+        body: JSON.stringify({ message: userMsg, stream: true }),
+        signal: controller.signal
       });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -148,9 +157,30 @@ export default function App() {
           } catch (e) { console.error("Stream parse error", e); }
         }
       }
-    } catch {
-      setMessages((m) => [...m, { type: "bot", text: "Backend not responding. Please check your connection." }]);
+
+      // Safety: if stream ended but no text was received, show fallback
+      if (!accumulatedText.trim()) {
+        setMessages((m) => {
+          const nm = [...m];
+          nm[nm.length - 1].text = "I couldn't process that request. Please try asking something else.";
+          nm[nm.length - 1].suggestions = ["What is groundwater?", "Conservation tips", "Show India map"];
+          return nm;
+        });
+      }
+    } catch (err) {
+      const isTimeout = err.name === "AbortError";
+      setMessages((m) => [
+        ...m,
+        {
+          type: "bot",
+          text: isTimeout
+            ? "The request took too long. Please try again with a simpler question."
+            : "Backend not responding. Please check your connection.",
+          suggestions: ["What is groundwater?", "Conservation tips", "Compare Punjab and Bihar"]
+        }
+      ]);
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   };
@@ -159,8 +189,21 @@ export default function App() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const formatText = (text) =>
-    text.replace(/\*\*(.*?)\*\*/g, "$1").replace(/###\s*(.*?)(\n|$)/g, "$1$2").replace(/\n\n/g, "\n").trim();
+  const formatText = (text) => {
+    if (!text) return "";
+    let html = text
+      // Headings: ### Title
+      .replace(/###\s*(.*?)(?:\n|$)/g, '<div class="bot-heading">$1</div>')
+      // Bold: **text**
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // Bullet points: • item or * item or - item (at start of line)
+      .replace(/^[•\*\-]\s+(.+)$/gm, '<li>$1</li>')
+      // Wrap consecutive <li> in <ul>
+      .replace(/(<li>.*?<\/li>\n?)+/gs, (match) => `<ul class="bot-list">${match}</ul>`)
+      // Line breaks
+      .replace(/\n/g, '<br/>');
+    return html;
+  };
 
   return (
     <div className="app">
@@ -185,10 +228,10 @@ export default function App() {
 
       <div className="main-content">
         {activeTab === "dashboard" && <Dashboard />}
-        {activeTab === "predict"   && <Predictions />}
-        {activeTab === "trends"    && <TrendAnalysis />}
-        {activeTab === "compare"   && <Comparison />}
-        {activeTab === "map"       && (
+        {activeTab === "predict" && <Predictions />}
+        {activeTab === "trends" && <TrendAnalysis />}
+        {activeTab === "compare" && <Comparison />}
+        {activeTab === "map" && (
           <div className="map-view"><GroundwaterMap /></div>
         )}
 
@@ -224,9 +267,13 @@ export default function App() {
             )}
 
             {messages.map((m, i) => (
-              <div key={i} className={`msg ${m.type}`}>
+              <div key={i} className={`msg ${m.type} msg-animate`}>
+                {m.type === "bot" && <div className="bot-avatar">🌊</div>}
                 <div className="bubble">
-                  {m.type === "bot" ? formatText(m.text) : m.text}
+                  {m.type === "bot"
+                    ? <div className="bot-text-content" dangerouslySetInnerHTML={{ __html: formatText(m.text) }} />
+                    : m.text
+                  }
                 </div>
 
                 {m.type === "bot" && m.imageUrl && (
@@ -302,9 +349,11 @@ export default function App() {
                     <div className="chart-container">
                       <Line data={{
                         labels: m.visualData.labels,
-                        datasets: [{ label: "Extraction (%)", data: m.visualData.values, fill: false,
+                        datasets: [{
+                          label: "Extraction (%)", data: m.visualData.values, fill: false,
                           borderColor: "#011627", backgroundColor: "#011627", tension: 0.3,
-                          pointRadius: 6, pointHoverRadius: 8 }]
+                          pointRadius: 6, pointHoverRadius: 8
+                        }]
                       }} options={{
                         responsive: true, maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
@@ -357,11 +406,14 @@ export default function App() {
             ))}
 
             {loading && (
-              <div className="msg bot">
+              <div className="msg bot msg-animate">
+                <div className="bot-avatar">🌊</div>
                 <div className="bubble">
-                  <div className="water-loader-container">
-                    <div className="water-loader"></div>
-                    <span className="loading-text">Analyzing groundwater data…</span>
+                  <div className="typing-indicator">
+                    <div className="typing-dots">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span className="loading-text">INGRES is thinking…</span>
                   </div>
                 </div>
               </div>
