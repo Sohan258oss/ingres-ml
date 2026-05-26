@@ -22,12 +22,12 @@ import "./App.css";
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend);
 
 const TABS = [
-  { id: "chat",       label: "💬 Chat",       icon: "💬" },
-  { id: "dashboard",  label: "📊 Dashboard",  icon: "📊" },
-  { id: "predict",    label: "🎯 Predictions", icon: "🎯" },
-  { id: "trends",     label: "📈 Trends",     icon: "📈" },
-  { id: "compare",    label: "⚖️ Compare",    icon: "⚖️" },
-  { id: "map",        label: "🗺️ India Map",  icon: "🗺️" },
+  { id: "chat", label: "💬 Chat", icon: "💬" },
+  { id: "dashboard", label: "📊 Dashboard", icon: "📊" },
+  { id: "predict", label: "🎯 Predictions", icon: "🎯" },
+  { id: "trends", label: "📈 Trends", icon: "📈" },
+  { id: "compare", label: "⚖️ Compare", icon: "⚖️" },
+  { id: "map", label: "🗺️ India Map", icon: "🗺️" },
 ];
 
 export default function App() {
@@ -198,10 +198,10 @@ export default function App() {
 
       <div className="main-content">
         {activeTab === "dashboard" && <Dashboard />}
-        {activeTab === "predict"   && <Predictions />}
-        {activeTab === "trends"    && <TrendAnalysis />}
-        {activeTab === "compare"   && <Comparison />}
-        {activeTab === "map"       && (
+        {activeTab === "predict" && <Predictions />}
+        {activeTab === "trends" && <TrendAnalysis />}
+        {activeTab === "compare" && <Comparison />}
+        {activeTab === "map" && (
           <div className="map-view"><GroundwaterMap /></div>
         )}
 
@@ -237,9 +237,8 @@ export default function App() {
             )}
 
             {messages.map((m, i) => (
-              <div key={i} className={`msg ${m.type}`}>
+              <div key={i} className={`msg ${m.type} msg-animate`}>
                 {m.type === "bot" && <div className="bot-avatar">🌊</div>}
-                <div className={m.type === "bot" ? "bot-content-wrapper" : undefined}>
                 <div className="bubble">
                   {m.type === "bot"
                     ? <div className="bot-text-content" dangerouslySetInnerHTML={{ __html: formatText(m.text) }} />
@@ -320,9 +319,11 @@ export default function App() {
                     <div className="chart-container">
                       <Line data={{
                         labels: m.visualData.labels,
-                        datasets: [{ label: "Extraction (%)", data: m.visualData.values, fill: false,
+                        datasets: [{
+                          label: "Extraction (%)", data: m.visualData.values, fill: false,
                           borderColor: "#011627", backgroundColor: "#011627", tension: 0.3,
-                          pointRadius: 6, pointHoverRadius: 8 }]
+                          pointRadius: 6, pointHoverRadius: 8
+                        }]
                       }} options={{
                         responsive: true, maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
@@ -371,20 +372,19 @@ export default function App() {
                     </div>
                   </div>
                 )}
-                </div>
               </div>
             ))}
 
             {loading && (
-              <div className="msg bot">
+              <div className="msg bot msg-animate">
                 <div className="bot-avatar">🌊</div>
-                <div className="bot-content-wrapper">
                 <div className="bubble">
-                  <div className="water-loader-container">
-                    <div className="water-loader"></div>
-                    <span className="loading-text">Analyzing groundwater data…</span>
+                  <div className="typing-indicator">
+                    <div className="typing-dots">
+                      <span></span><span></span><span></span>
+                    </div>
+                    <span className="loading-text">INGRES is thinking…</span>
                   </div>
-                </div>
                 </div>
               </div>
             )}
