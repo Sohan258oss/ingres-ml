@@ -152,13 +152,38 @@ CORS_ORIGINS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize MongoDB client
-    app.state.mongo_client = motor.motor_asyncio.AsyncIOMotorClient(
-        MONGODB_URI,
-        serverSelectionTimeoutMS=MONGODB_TIMEOUT_MS,
-        tlsCAFile=certifi.where(),
-    )
-    app.state.db = app.state.mongo_client[DB_NAME]
+    from database import SQLiteDatabase
+    
+    # Try connecting to MongoDB first
+    try:
+        app.state.mongo_client = motor.motor_asyncio.AsyncIOMotorClient(
+            MONGODB_URI,
+            serverSelectionTimeoutMS=2000, # fast timeout for local check
+            tlsCAFile=certifi.where(),
+        )
+        app.state.db = app.state.mongo_client[DB_NAME]
+        # Force a check
+        await app.state.mongo_client.server_info()
+        # Verify collection has data
+        assessments_coll = app.state.db.assessments
+        sample = await assessments_coll.find_one()
+        if sample is None:
+            raise Exception("MongoDB is connected but has no data.")
+        print("Connected to MongoDB successfully.")
+        app.state.db_type = "mongodb"
+    except Exception as mongo_err:
+        print(f"MongoDB connection failed/empty ({mongo_err}). Falling back to local SQLite!")
+        if hasattr(app.state, "mongo_client") and app.state.mongo_client:
+            try:
+                app.state.mongo_client.close()
+            except Exception:
+                pass
+        app.state.mongo_client = None
+        
+        sqlite_db_path = os.path.join(os.path.dirname(__file__), "ingres.db")
+        app.state.db = SQLiteDatabase(sqlite_db_path)
+        print(f"Using SQLite database at {sqlite_db_path}.")
+        app.state.db_type = "sqlite"
 
     # Initialize semantic search and cache locations
     try:
@@ -196,7 +221,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Error initializing: {e}")
     yield
-    app.state.mongo_client.close()
+    if hasattr(app.state, "mongo_client") and app.state.mongo_client:
+        app.state.mongo_client.close()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -843,6 +869,14 @@ async def get_rule_based_response(user_input: str, request: Request):
     import random
     is_map_requested = detect_map_request(user_input)
 
+    # Normalize Bangalore/Bengaluru names
+    if "bangalore urban" in user_input:
+        user_input = user_input.replace("bangalore urban", "bengaluru urban")
+    elif "bangalore rural" in user_input:
+        pass
+    elif "bangalore" in user_input:
+        user_input = user_input.replace("bangalore", "bengaluru urban")
+
     # Normalize terms
     if "overexploited" in user_input or "over exploited" in user_input:
         user_input = user_input.replace("overexploited", "over-exploited").replace("over exploited", "over-exploited")
@@ -879,6 +913,23 @@ async def get_rule_based_response(user_input: str, request: Request):
 
     # --- 0c. DIRECT DEFINITION INTENT (HIGHEST PRIORITY for educational queries) ---
     definition_subject = extract_definition_subject(user_input)
+    if definition_subject:
+        # If the subject refers to a known location, let it fall through to the location lookup instead
+        states_list = getattr(request.app.state, "states_list", [])
+        districts_list = getattr(request.app.state, "districts_list", [])
+        is_location = False
+        for s in states_list:
+            if s.lower() in definition_subject:
+                is_location = True
+                break
+        if not is_location:
+            for d in districts_list:
+                if d.lower() in definition_subject:
+                    is_location = True
+                    break
+        if is_location:
+            definition_subject = None
+
     if definition_subject:
         # First try exact match in KNOWLEDGE_BASE
         if definition_subject in KNOWLEDGE_BASE:

@@ -313,10 +313,17 @@ async def compare_districts(request: Request, req: CompareRequest):
 
     results = []
     for loc in req.locations:
-        loc_lower = loc.lower().strip()
+        loc_clean = loc.strip()
+        loc_lower = loc_clean.lower()
+        if "bangalore urban" in loc_lower:
+            loc_clean = re.sub(r'bangalore urban', 'bengaluru urban', loc_clean, flags=re.IGNORECASE)
+        elif "bangalore rural" in loc_lower:
+            pass
+        elif "bangalore" in loc_lower:
+            loc_clean = re.sub(r'\bbangalore\b', 'bengaluru urban', loc_clean, flags=re.IGNORECASE)
 
         pipeline = [
-            {"$match": {"$or": [{state_col: {"$regex": f"^{loc}$", "$options": "i"}}, {dist_col: {"$regex": f"^{loc}$", "$options": "i"}}]}},
+            {"$match": {"$or": [{state_col: {"$regex": f"^{re.escape(loc_clean)}$", "$options": "i"}}, {dist_col: {"$regex": f"^{re.escape(loc_clean)}$", "$options": "i"}}]}},
             {"$group": {
                 "_id": { "state": f"${state_col}", "district": f"${dist_col}" },
                 "avg_extraction": {"$avg": f"${extr_col}"},

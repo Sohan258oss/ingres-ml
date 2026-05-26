@@ -59,6 +59,16 @@ def load_existing_data():
             df = df.drop(columns=['_id'])
         return df
     except Exception:
+        try:
+            db_path = os.path.join(os.path.dirname(__file__), "..", "ingres.db")
+            if os.path.exists(db_path):
+                import sqlite3
+                conn = sqlite3.connect(db_path)
+                df = pd.read_sql("SELECT * FROM assessments", conn)
+                conn.close()
+                return df
+        except Exception:
+            pass
         return pd.DataFrame()
 
 
@@ -133,7 +143,20 @@ def generate_trend_dataset(n_per_state=8, seed=42):
         client = pymongo.MongoClient(MONGODB_URI, serverSelectionTimeoutMS=2000)
         db = client[DB_NAME]
         trends = pd.DataFrame(list(db.state_trends.find()))
-        if not trends.empty:
+    except Exception:
+        trends = pd.DataFrame()
+        try:
+            db_path = os.path.join(os.path.dirname(__file__), "..", "ingres.db")
+            if os.path.exists(db_path):
+                import sqlite3
+                conn = sqlite3.connect(db_path)
+                trends = pd.read_sql("SELECT * FROM state_trends", conn)
+                conn.close()
+        except Exception:
+            pass
+
+    if not trends.empty:
+        try:
             for _, row in trends.iterrows():
                 state = str(row.get("State", "")).lower().strip()
                 anchor_data[state] = {
